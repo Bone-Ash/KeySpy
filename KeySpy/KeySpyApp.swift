@@ -24,7 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
-        monitor.start()
+        monitor.checkAccessibilityPermission()
     }
 }
 
@@ -32,12 +32,34 @@ final class SpyMonitor {
     private var monitor: Any?
     private var pressedKeys: Set<UInt16> = []
     
-    func start() {
-        guard AXIsProcessTrusted() else {
+    func checkAccessibilityPermission() {
+        if AXIsProcessTrusted() {
+            start()
+        } else {
             AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary)
-            return
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                self.showPermissionAlert()
+            }
         }
+    }
+    
+    private func showPermissionAlert() {
+        let alert = NSAlert()
+        alert.messageText = "需要辅助功能权限"
+        alert.informativeText = "请在系统设置 > 隐私与安全性 > 辅助功能中添加此应用"
+        alert.addButton(withTitle: "打开设置")
+        alert.addButton(withTitle: "取消")
         
+        let response = alert.runModal()
+        if response == .alertFirstButtonReturn {
+            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+        } else {
+            NSApp.terminate(nil)
+        }
+    }
+    
+    func start() {
         monitor = NSEvent.addGlobalMonitorForEvents(matching: [.keyDown, .keyUp]) { event in
             let keyCode = event.keyCode
             
